@@ -129,7 +129,7 @@ export const parseLogFile = (content: string): ParsedLogData => {
                    if (steps.auth === 'SUCCESS' && steps.precheck === 'PENDING') {
                        if (lastPending.status === 'FAILURE') {
                            steps.precheck = 'FAILURE';
-                           steps.precheckFailureReason = `${lastPending.statusCode} ${lastPending.method} ${lastPending.endpoint}`;
+                           steps.precheckFailureReason = `${lastPending.statusCode}: ${lastPending.method} ${lastPending.endpoint.split('/').pop()}`;
                            
                            // Fail subsequent steps
                            steps.upload = 'SKIPPED';
