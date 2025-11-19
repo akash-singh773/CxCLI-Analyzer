@@ -1,0 +1,5 @@
+{
+  "name": "Copy of CxCLI Log Analyzer",
+  "description": "A robust offline tool to parse, visualize, and analyze Checkmarx CLI log files for troubleshooting and auditing.",
+  "requestFramePermissions": []
+}
