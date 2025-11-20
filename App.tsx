@@ -1,192 +1,102 @@
-import React, { useState, useCallback } from 'react';
-import { parseLogFile } from './services/logParser';
-import { ParsedLogData } from './types';
-import { Dashboard } from './components/Dashboard';
-import { UploadCloud, FileText, Clipboard, Play, FileCode } from 'lucide-react';
+import React, { useState } from 'react';
+import { Icons } from './components/Icons';
+import { LogAnalyzer } from './components/LogAnalyzer';
+import { JwtDecoder } from './components/JwtDecoder';
+import { ErrorAnalyzer } from './components/ErrorAnalyzer';
+import { RoleFinder } from './components/RoleFinder';
+
+type ActiveTool = 'logs' | 'jwt' | 'errors' | 'roles';
 
 const App: React.FC = () => {
-  const [parsedData, setParsedData] = useState<ParsedLogData | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [pastedLog, setPastedLog] = useState('');
+  const [activeTool, setActiveTool] = useState<ActiveTool>('logs');
 
-  const processContent = (content: string) => {
-    if (!content.trim()) {
-      setError("Log content is empty.");
-      return;
-    }
-    
-    setLoading(true);
-    setError(null);
-
-    // Small delay to allow UI to update loading state
-    setTimeout(() => {
-      try {
-          const data = parseLogFile(content);
-          setParsedData(data);
-      } catch (e) {
-          setError("Failed to parse the log content. Ensure it is a standard Checkmarx CLI log.");
-          console.error(e);
-      } finally {
-          setLoading(false);
-      }
-    }, 50);
-  };
-
-  const processFile = async (file: File) => {
-    try {
-      const text = await file.text();
-      processContent(text);
-    } catch (err) {
-      setError("Error reading file.");
-      setLoading(false);
+  const renderContent = () => {
+    switch (activeTool) {
+        case 'logs': return <LogAnalyzer />;
+        case 'jwt': return <JwtDecoder />;
+        case 'errors': return <ErrorAnalyzer />;
+        case 'roles': return <RoleFinder />;
+        default: return <LogAnalyzer />;
     }
   };
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      processFile(e.dataTransfer.files[0]);
-    }
-  }, []);
-
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      processFile(e.target.files[0]);
-    }
-  };
-
-  const handlePasteAnalyze = () => {
-    processContent(pastedLog);
-  };
-
-  const handleReset = () => {
-    setParsedData(null);
-    setPastedLog('');
-    setError(null);
-  };
-
-  if (parsedData) {
-    return <Dashboard data={parsedData} onReset={handleReset} />;
-  }
+  const NavItem = ({ id, label, icon: Icon, desc }: { id: ActiveTool, label: string, icon: any, desc: string }) => (
+    <button
+        onClick={() => setActiveTool(id)}
+        className={`w-full text-left p-4 rounded-xl transition-all duration-200 flex items-start group ${
+            activeTool === id 
+            ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' 
+            : 'hover:bg-white hover:shadow-md text-gray-600'
+        }`}
+    >
+        <div className={`p-2 rounded-lg mr-3 shrink-0 ${
+            activeTool === id ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500 group-hover:bg-blue-50 group-hover:text-blue-600'
+        }`}>
+            <Icon size={20} />
+        </div>
+        <div>
+            <div className={`font-bold ${activeTool === id ? 'text-white' : 'text-gray-800'}`}>{label}</div>
+            <div className={`text-xs mt-1 ${activeTool === id ? 'text-blue-100' : 'text-gray-400'}`}>{desc}</div>
+        </div>
+    </button>
+  );
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
-       <div className="max-w-4xl w-full text-center mb-10">
-          <h1 className="text-4xl font-extrabold text-gray-800 mb-3 tracking-tight">CxCLI Log Analyzer</h1>
-          <p className="text-gray-500 text-lg">Analyze your Checkmarx CLI logs offline. Visualize timeline, API calls, and scan results instantly.</p>
-       </div>
-
-       <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Left Panel: Drag & Drop */}
-          <div 
-            className={`
-                relative w-full p-10 bg-white rounded-2xl border-2 border-dashed transition-all duration-200
-                flex flex-col items-center justify-center space-y-6 shadow-sm min-h-[400px]
-                ${isDragging ? 'border-blue-500 bg-blue-50 scale-[1.02]' : 'border-gray-300 hover:border-blue-400'}
-            `}
-            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={handleDrop}
-          >
-            <div className={`p-5 rounded-full ${loading ? 'bg-gray-100' : 'bg-blue-50 text-blue-600'}`}>
-                {loading ? (
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-                ) : (
-                    <UploadCloud size={48} />
-                )}
-            </div>
-
-            <div className="text-center">
-                <h3 className="text-xl font-bold text-gray-800">
-                    {loading ? 'Processing...' : 'Upload Log File'}
-                </h3>
-                <p className="text-gray-500 mt-2">Drag & drop your .log or .txt file here</p>
-            </div>
-
-            <input 
-                type="file" 
-                accept=".log,.txt" 
-                className="hidden" 
-                id="file-upload"
-                onChange={handleFileInput}
-                disabled={loading}
-            />
-            <label 
-                htmlFor="file-upload" 
-                className={`
-                    px-8 py-3 bg-blue-600 text-white rounded-lg font-medium shadow-md 
-                    hover:bg-blue-700 transform transition hover:-translate-y-0.5 cursor-pointer flex items-center
-                    ${loading ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}
-                `}
-            >
-                <FileCode className="mr-2" size={18} /> Select File
-            </label>
-          </div>
-
-          {/* Right Panel: Paste Logs */}
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 flex flex-col min-h-[400px]">
-             <div className="flex items-center mb-4 text-gray-800 font-bold text-lg">
-                <Clipboard className="mr-2 text-blue-600" size={22} />
-                <h3>Paste Logs Directly</h3>
-             </div>
-             <div className="flex-1 relative mb-4 group">
-                <textarea
-                    className="w-full h-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-xs font-mono focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none transition-colors placeholder-gray-400"
-                    placeholder="Paste raw log content here (e.g., 2025/11/19 10:51:35 CLI Version: ...)"
-                    value={pastedLog}
-                    onChange={(e) => setPastedLog(e.target.value)}
-                    disabled={loading}
-                />
-                {!pastedLog && (
-                    <div className="absolute inset-0 pointer-events-none flex items-center justify-center text-gray-300">
-                        <FileText size={48} opacity={0.2} />
+    <div className="flex h-screen bg-gray-100 overflow-hidden font-sans">
+        {/* Sidebar */}
+        <aside className="w-80 bg-gray-50 border-r border-gray-200 flex flex-col">
+            <div className="p-6 border-b border-gray-200 bg-white">
+                <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center text-white shadow-lg">
+                        <Icons.Tool size={20} />
                     </div>
-                )}
-             </div>
-             <button
-                onClick={handlePasteAnalyze}
-                disabled={!pastedLog.trim() || loading}
-                className={`
-                    w-full py-4 rounded-xl font-bold shadow-sm transition-all flex items-center justify-center text-base
-                    ${!pastedLog.trim() || loading 
-                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                        : 'bg-gray-900 text-white hover:bg-gray-800 hover:shadow-md'}
-                `}
-             >
-                {loading ? 'Processing...' : (
-                    <>
-                        <Play size={18} className="mr-2 fill-current" /> Analyze Pasted Log
-                    </>
-                )}
-             </button>
-          </div>
-       </div>
+                    <div>
+                        <h1 className="text-lg font-black text-gray-900 tracking-tight leading-none">Checkmarx</h1>
+                        <h1 className="text-lg font-light text-blue-600 tracking-wide leading-none">Rezolv</h1>
+                    </div>
+                </div>
+                <p className="text-xs text-gray-400 mt-3 ml-1">Support Engineer Toolkit v2.0</p>
+            </div>
 
-       {error && (
-         <div className="mt-8 p-4 bg-red-50 text-red-700 rounded-xl border border-red-200 max-w-2xl w-full flex items-start animate-pulse">
-            <FileText className="mr-3 mt-0.5 shrink-0" size={20} />
-            <div>{error}</div>
-         </div>
-       )}
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                <div className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-2 mb-2 mt-2">Tools</div>
+                <NavItem 
+                    id="logs" 
+                    label="CxCLI Log Analyzer" 
+                    icon={Icons.Logs} 
+                    desc="Parse & visualize CLI logs"
+                />
+                <NavItem 
+                    id="jwt" 
+                    label="JWT Decoder" 
+                    icon={Icons.Key} 
+                    desc="Inspect token payload"
+                />
+                <NavItem 
+                    id="errors" 
+                    label="Error Analyzer" 
+                    icon={Icons.Search} 
+                    desc="Lookup status codes"
+                />
+                
+                <div className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-2 mb-2 mt-6">Beta</div>
+                <NavItem 
+                    id="roles" 
+                    label="Role Finder" 
+                    icon={Icons.Users} 
+                    desc="Analyze IAM permissions"
+                />
+            </div>
 
-       <div className="mt-16 grid grid-cols-3 gap-8 text-center text-gray-400 text-xs max-w-xl">
-          <div>
-             <strong className="block text-gray-600 text-sm mb-1">Offline</strong>
-             Run locally in your browser
-          </div>
-          <div>
-             <strong className="block text-gray-600 text-sm mb-1">Secure</strong>
-             No data leaves your machine
-          </div>
-          <div>
-             <strong className="block text-gray-600 text-sm mb-1">Fast</strong>
-             Instant parsing & analysis
-          </div>
-       </div>
+            <div className="p-4 border-t border-gray-200 bg-gray-50 text-center text-xs text-gray-400">
+                &copy; 2025 Checkmarx Rezolv
+            </div>
+        </aside>
+
+        {/* Main Content */}
+        <main className="flex-1 relative overflow-hidden">
+            {renderContent()}
+        </main>
     </div>
   );
 };

@@ -13,7 +13,16 @@ import {
   FileCode,
   Terminal,
   Copy,
-  ClipboardCheck
+  ClipboardCheck,
+  ListChecks,
+  Lightbulb,
+  Key,
+  BookOpen,
+  Users,
+  Home,
+  Wrench,
+  ArrowRight,
+  X
 } from 'lucide-react';
 
 export const Icons = {
@@ -27,8 +36,18 @@ export const Icons = {
   Time: Clock,
   Upload: UploadCloud,
   Scan: Search,
+  Search: Search,
   Results: ShieldAlert,
   Code: FileCode,
   Copy: Copy,
-  Precheck: ClipboardCheck
+  Precheck: ClipboardCheck,
+  Summary: ListChecks,
+  Suggestion: Lightbulb,
+  Key: Key,
+  Knowledge: BookOpen,
+  Users: Users,
+  Home: Home,
+  Tool: Wrench,
+  ArrowRight: ArrowRight,
+  Close: X
 };

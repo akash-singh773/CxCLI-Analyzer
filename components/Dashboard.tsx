@@ -8,6 +8,12 @@ interface DashboardProps {
   onReset: () => void;
 }
 
+interface Suggestion {
+  title: string;
+  description: string;
+  type: 'critical' | 'high' | 'medium' | 'info';
+}
+
 const TabButton = ({ active, onClick, icon: Icon, label }: any) => (
   <button
     onClick={onClick}
@@ -83,13 +89,78 @@ const StepCard = ({ label, status, icon: Icon, detail }: any) => {
 };
 
 export const Dashboard: React.FC<DashboardProps> = ({ data, onReset }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'api' | 'flags' | 'files' | 'raw'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'summary' | 'suggestions' | 'api' | 'flags' | 'files' | 'raw'>('overview');
   const [apiFilter, setApiFilter] = useState('');
 
   const filteredApi = data.apiCalls.filter(call => 
     call.url.toLowerCase().includes(apiFilter.toLowerCase()) || 
     call.method.includes(apiFilter.toUpperCase())
   );
+
+  // Logic to generate suggestions
+  const generateSuggestions = (): Suggestion[] => {
+    const suggs: Suggestion[] = [];
+    const failedCalls = data.apiCalls.filter(c => c.status === 'FAILURE');
+    const uniqueCodes = new Set(failedCalls.map(c => c.statusCode).filter(c => c !== undefined));
+
+    // 1. Authentication
+    if (data.scanSteps.auth === 'FAILURE') {
+      suggs.push({
+        title: 'Authentication Failed',
+        description: 'The CLI failed to authenticate. Verify your API Key or Client Secret. Ensure the base URI is correct (e.g., eu.ast.checkmarx.net vs us.ast.checkmarx.net).',
+        type: 'critical'
+      });
+    }
+
+    // 2. Permissions (401/403)
+    if (uniqueCodes.has(401) || uniqueCodes.has(403)) {
+      suggs.push({
+        title: 'Permission Issues (401/403)',
+        description: 'Access was denied for some resources. Ensure the user/client has the "ast-admin" or "manage-scans" role. If this happened during Precheck, check access to the specific project.',
+        type: 'critical'
+      });
+    }
+
+    // 3. Proxy/Gateway (502/503/504)
+    if (uniqueCodes.has(502) || uniqueCodes.has(503) || uniqueCodes.has(504)) {
+      suggs.push({
+        title: 'Network/Proxy Timeout (50x)',
+        description: 'Gateway timeout or service unavailable errors detected. This is often caused by a Corporate Proxy or WAF blocking the connection. \nTry setting HTTP_PROXY and HTTPS_PROXY environment variables.',
+        type: 'high'
+      });
+    }
+
+    // 4. Not Found (404)
+    if (uniqueCodes.has(404)) {
+      suggs.push({
+        title: 'Resource Not Found (404)',
+        description: 'An API endpoint returned 404. If this happened during project retrieval, the project ID might be incorrect or the project was deleted.',
+        type: 'medium'
+      });
+    }
+
+    // 5. Zip Upload
+    if (data.scanSteps.upload === 'FAILURE') {
+      suggs.push({
+        title: 'Upload Failure',
+        description: 'The zip upload failed. Check if the zipped source code exceeds the maximum allowed size (usually 200MB or 1GB depending on tenant). Check your internet upload speed stability.',
+        type: 'high'
+      });
+    }
+
+    // 6. General Success Info
+    if (suggs.length === 0 && data.summary.status?.toLowerCase() === 'completed') {
+      suggs.push({
+        title: 'Scan Optimization',
+        description: 'The scan completed successfully. You can verify the "Files" tab to ensure large binary files or "node_modules" were excluded to reduce scan time.',
+        type: 'info'
+      });
+    }
+
+    return suggs;
+  };
+
+  const suggestions = generateSuggestions();
 
   // Stats for Charts
   const severityData = [
@@ -120,8 +191,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, onReset }) => {
               Upload New Log
             </button>
           </div>
-          <div className="flex space-x-1">
+          <div className="flex space-x-1 overflow-x-auto">
             <TabButton active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} icon={Icons.Overview} label="Overview" />
+            <TabButton active={activeTab === 'summary'} onClick={() => setActiveTab('summary')} icon={Icons.Summary} label="Summary" />
+            <TabButton active={activeTab === 'suggestions'} onClick={() => setActiveTab('suggestions')} icon={Icons.Suggestion} label="Suggestions" />
             <TabButton active={activeTab === 'api'} onClick={() => setActiveTab('api')} icon={Icons.Api} label="API Analysis" />
             <TabButton active={activeTab === 'flags'} onClick={() => setActiveTab('flags')} icon={Icons.Flags} label="Feature Flags" />
             <TabButton active={activeTab === 'files'} onClick={() => setActiveTab('files')} icon={Icons.Files} label="Files" />
@@ -211,6 +284,148 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, onReset }) => {
                    </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* SUMMARY TAB */}
+          {activeTab === 'summary' && (
+            <div className="space-y-6">
+                {/* Execution Status Summary */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                    <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
+                        <Icons.Summary className="mr-2 text-blue-600" size={24} />
+                        Execution Summary
+                    </h3>
+                    <div className="prose text-gray-600">
+                        <p>
+                            The CLI execution started at <span className="font-mono font-semibold text-gray-800">{data.startTime?.toLocaleTimeString()}</span>.
+                            Authentication was <span className={`font-bold ${data.scanSteps.auth === 'SUCCESS' ? 'text-green-600' : 'text-red-600'}`}>{data.scanSteps.auth}</span>.
+                        </p>
+                        <p className="mt-2">
+                            The overall execution flow finished with status: 
+                             <span className={`ml-2 px-2 py-0.5 rounded font-bold text-white ${
+                                 data.errors.length > 0 || data.scanSteps.results === 'FAILURE' 
+                                 ? 'bg-red-500' 
+                                 : 'bg-green-500'
+                             }`}>
+                                {data.errors.length > 0 ? 'ISSUES DETECTED' : 'COMPLETED SUCCESSFULLY'}
+                             </span>
+                        </p>
+                        {data.summary.totalDuration && (
+                            <p className="mt-2">Total elapsed time was <strong>{data.summary.totalDuration}</strong>.</p>
+                        )}
+                    </div>
+                </div>
+
+                {/* Failed Steps Detail */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                    <h3 className="text-lg font-bold text-gray-800 mb-4 text-red-600">Failed Steps Breakdown</h3>
+                    {Object.entries(data.scanSteps).filter(([k, v]) => v === 'FAILURE').length > 0 ? (
+                        <div className="space-y-4">
+                            {Object.entries(data.scanSteps).map(([step, status]) => {
+                                if (status !== 'FAILURE') return null;
+                                // Don't render the reason fields as steps
+                                if (step.includes('Reason')) return null;
+                                
+                                const reasonKey = `${step}FailureReason` as keyof typeof data.scanSteps;
+                                const reason = data.scanSteps[reasonKey];
+
+                                return (
+                                    <div key={step} className="p-4 bg-red-50 border border-red-100 rounded-lg">
+                                        <h4 className="font-bold text-red-800 uppercase text-sm mb-1">{step} Step Failed</h4>
+                                        <p className="text-red-700 text-sm">{reason || 'Check raw logs for detailed error message.'}</p>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <div className="text-center py-8 text-green-600 bg-green-50 rounded-lg border border-green-100">
+                            <Icons.Success className="mx-auto mb-2" size={32} />
+                            <p className="font-medium">No steps failed during execution.</p>
+                        </div>
+                    )}
+                </div>
+
+                {/* Top Failed API Calls */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                    <h3 className="text-lg font-bold text-gray-800 mb-4">Failed API Calls</h3>
+                     {data.apiCalls.filter(c => c.status === 'FAILURE').length > 0 ? (
+                         <div className="overflow-x-auto">
+                            <table className="min-w-full text-sm text-left">
+                                <thead className="bg-gray-50 text-gray-500 font-medium">
+                                    <tr>
+                                        <th className="p-3">Method</th>
+                                        <th className="p-3">Endpoint</th>
+                                        <th className="p-3">Status</th>
+                                        <th className="p-3">Response (Snapshot)</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y">
+                                    {data.apiCalls.filter(c => c.status === 'FAILURE').map(call => (
+                                        <tr key={call.id}>
+                                            <td className="p-3 font-mono font-bold text-red-600">{call.method}</td>
+                                            <td className="p-3 font-mono text-gray-700">{call.endpoint}</td>
+                                            <td className="p-3"><span className="bg-red-100 text-red-800 px-2 py-1 rounded font-bold">{call.statusCode}</span></td>
+                                            <td className="p-3 text-xs text-gray-500 font-mono truncate max-w-xs" title={call.responseBody}>
+                                                {call.responseBody || '-'}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                         </div>
+                     ) : (
+                         <p className="text-gray-500 italic">No failed API calls recorded.</p>
+                     )}
+                </div>
+            </div>
+          )}
+
+          {/* SUGGESTIONS TAB */}
+          {activeTab === 'suggestions' && (
+            <div className="grid grid-cols-1 gap-6">
+                <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex items-start">
+                    <Icons.Suggestion className="text-blue-600 mt-1 mr-3 shrink-0" size={24} />
+                    <div>
+                        <h3 className="text-blue-800 font-bold">Automated Analysis</h3>
+                        <p className="text-blue-700 text-sm mt-1">
+                            Based on the logs, we have analyzed specific error codes and execution patterns to provide the following suggestions.
+                        </p>
+                    </div>
+                </div>
+
+                {suggestions.map((suggestion, idx) => (
+                    <div key={idx} className={`
+                        p-6 rounded-xl border shadow-sm flex items-start space-x-4
+                        ${suggestion.type === 'critical' ? 'bg-red-50 border-red-200' : ''}
+                        ${suggestion.type === 'high' ? 'bg-orange-50 border-orange-200' : ''}
+                        ${suggestion.type === 'medium' ? 'bg-yellow-50 border-yellow-200' : ''}
+                        ${suggestion.type === 'info' ? 'bg-white border-gray-200' : ''}
+                    `}>
+                        <div className={`
+                            p-3 rounded-full shrink-0
+                            ${suggestion.type === 'critical' ? 'bg-red-100 text-red-600' : ''}
+                            ${suggestion.type === 'high' ? 'bg-orange-100 text-orange-600' : ''}
+                            ${suggestion.type === 'medium' ? 'bg-yellow-100 text-yellow-600' : ''}
+                            ${suggestion.type === 'info' ? 'bg-gray-100 text-gray-600' : ''}
+                        `}>
+                            <Icons.Suggestion size={24} />
+                        </div>
+                        <div>
+                            <h4 className={`text-lg font-bold mb-1
+                                ${suggestion.type === 'critical' ? 'text-red-900' : ''}
+                                ${suggestion.type === 'high' ? 'text-orange-900' : ''}
+                                ${suggestion.type === 'medium' ? 'text-yellow-900' : ''}
+                                ${suggestion.type === 'info' ? 'text-gray-800' : ''}
+                            `}>
+                                {suggestion.title}
+                            </h4>
+                            <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">
+                                {suggestion.description}
+                            </p>
+                        </div>
+                    </div>
+                ))}
             </div>
           )}
 

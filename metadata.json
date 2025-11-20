@@ -1,5 +1,5 @@
 {
-  "name": "Copy of CxCLI Log Analyzer",
-  "description": "A robust offline tool to parse, visualize, and analyze Checkmarx CLI log files for troubleshooting and auditing.",
+  "name": "Checkmarx Rezolv",
+  "description": "The ultimate toolkit for Checkmarx Support Engineers. Includes Log Analyzer, JWT Decoder, Error Analysis, and more.",
   "requestFramePermissions": []
 }
