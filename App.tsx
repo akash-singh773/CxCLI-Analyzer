@@ -47,9 +47,11 @@ const App: React.FC = () => {
         <aside className="w-80 bg-gray-50 border-r border-gray-200 flex flex-col">
             <div className="p-6 border-b border-gray-200 bg-white">
                 <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center text-white shadow-lg">
-                        <Icons.Tool size={20} />
-                    </div>
+                    <img 
+                        src="https://techno-fin.com/wp-content/uploads/2025/10/12397690.png" 
+                        className="w-10 h-10 rounded-lg shadow-lg object-contain"
+                        alt="Checkmarx Logo"
+                    />
                     <div>
                         <h1 className="text-lg font-black text-gray-900 tracking-tight leading-none">Checkmarx</h1>
                         <h1 className="text-lg font-light text-blue-600 tracking-wide leading-none">Rezolv</h1>
